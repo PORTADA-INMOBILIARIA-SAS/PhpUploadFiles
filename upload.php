@@ -6,10 +6,20 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
 
 // Function to verify uploaded files
-function verifyFiles() {
-    // Implement your file verification logic here
-    // For example, check file size, type, etc.
-    return true;
+function verifyFiles(string $mimetype) : bool {
+// Define allowed MIME types
+    $allowedFiles = [
+        'image/jpeg',
+        'image/jpg',
+        'video/mp4',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+
+
+    return in_array($mimetype, $allowedFiles);
 }
 
 // Function to handle file uploads
@@ -23,31 +33,41 @@ function handleUpload($module, $id) {
 
 
     if (isset($_FILES)) {
-        $files = $_FILES;
-        $filenames = [];
+		$files = $_FILES;
+		$filenames = [];
 
-        foreach ($files as  $file) {
-            $filename = basename($file['name']);
-            $fileExtension = pathinfo($filename, PATHINFO_EXTENSION);
-            $destination = $uploadDir .   $fileExtension ;
+		foreach ($files as  $file) {
 
-			var_dump($file);
+			$fileMimeType = mime_content_type($file['tmp_name']);
+			$filename = basename($file['name']);
+			$fileExtension = pathinfo($filename, PATHINFO_EXTENSION);
+			$destination = $uploadDir .   $fileExtension ;
 
-            if (move_uploaded_file($file["tmp_name"], $destination . $filename)) {
-                $filenames[] = $filename;
-            } else {
-                http_response_code(500);
-                $response['error'] = "Error uploading files!";
-                echo json_encode($response);
-                exit();
-            }
-        }
+			if(!verifyFiles($fileMimeType)) {
 
-        $response['response'] = "Files uploaded";
-        $response['files'] = $filenames;
-        $response['destination'] = $uploadDir;
+				http_response_code(401);
+				$response['error'] = "File type not allowed";
+				echo json_encode($response);
+				exit();
 
-        echo json_encode($response);
+			}
+
+
+			if (move_uploaded_file($file["tmp_name"], $destination . $filename)) {
+				$filenames[] = $filename;
+			} else {
+				http_response_code(500);
+				$response['error'] = "Error uploading files!";
+				echo json_encode($response);
+				exit();
+			}
+		}
+
+		$response['response'] = "Files uploaded";
+		$response['files'] = $filenames;
+		$response['destination'] = $uploadDir;
+
+		echo json_encode($response);
     } else {
         http_response_code(400);
         $response['response'] = "No files uploaded";
@@ -64,13 +84,7 @@ switch ($requestMethod) {
         $id = $_POST['id'] ?? '';
 
         if ($module !== '' && $id !== '') {
-            if (verifyFiles()) {
                 handleUpload($module, $id);
-            } else {
-                http_response_code(400);
-                $response['response'] = "File verification failed";
-                echo json_encode($response);
-            }
         } else {
             http_response_code(400);
             $response['response'] = "Module or ID not provided";
