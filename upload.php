@@ -34,27 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Set up CORS headers
 
 
-function CORSMiddleware($allowedOrigins) {
-    return function ($request, $response, $next) use ($allowedOrigins) {
-        $requestOrigin = $request->getHeaderLine('Origin');
-
-        if (in_array($requestOrigin, $allowedOrigins)) {
-            $response = $response->withHeader('Access-Control-Allow-Origin', $requestOrigin);
-        }
-
-        $response = $response->withHeader('Access-Control-Allow-Credentials', 'true')
-                             ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, authorization, accept, origin, apiclient, Cache-Control, X-Requested-With')
-                             ->withHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET, PUT');
-
-        if ($request->getMethod() == 'OPTIONS') {
-            return $response->withStatus(204);
-        }
-
-        return $next($request, $response);
-    };
-}
-
-
 // Function to verify authorization
 function verifyAuthorization(string $authToken, string $apiClient) : bool {
     // Get authentication data from environment variables
@@ -93,36 +72,39 @@ function verifyFiles(string $mimetype) : bool {
 
 // Function to handle file uploads
 function handleUpload($module, $id) {
-    $uploadDir = "files/$module/$id/";
-    $response = [];
 
-    if (!file_exists($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
-    }
-
-
-    if (isset($_FILES)) {
+	if (isset($_FILES)) {
 		$files = $_FILES;
 		$filenames = [];
 
 		foreach ($files as  $file) {
 
 			$fileMimeType = mime_content_type($file['tmp_name']);
-			$filename = basename($file['name']);
-			$fileExtension = pathinfo($filename, PATHINFO_EXTENSION);
-			$destination = $uploadDir  ;
 
 			if(!verifyFiles($fileMimeType)) {
-
 				http_response_code(401);
 				$response['error'] = "File type not allowed";
 				echo json_encode($response);
 				exit();
-
 			}
 
 
-			if (move_uploaded_file($file["tmp_name"], $destination . $filename)) {
+			$uploadDir = "files/$module/$id/";
+			$response = [];
+
+
+			$filename = basename($file['name']);
+			$fileExtension = pathinfo($filename, PATHINFO_EXTENSION);
+			$destination = $uploadDir . $fileExtension . "/"  ;
+
+
+			if (!file_exists($destination)) {
+				mkdir($destination, 0777, true);
+			}
+
+
+
+			if (move_uploaded_file($file["tmp_name"], $destination  . $filename)) {
 				$filenames[] = $filename;
 			} else {
 				http_response_code(500);
@@ -134,14 +116,14 @@ function handleUpload($module, $id) {
 
 		$response['response'] = "Files uploaded";
 		$response['files'] = $filenames;
-		$response['destination'] = $uploadDir;
+		$response['destination'] = $uploadDir . "{file_extension}";
 
 		echo json_encode($response);
-    } else {
-        http_response_code(400);
-        $response['response'] = "No files uploaded";
-        echo json_encode($response);
-    }
+	} else {
+		http_response_code(400);
+		$response['response'] = "No files uploaded";
+		echo json_encode($response);
+	}
 }
 
 // Get request method and execute corresponding action
