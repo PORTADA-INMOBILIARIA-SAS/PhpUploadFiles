@@ -1,0 +1,2 @@
+SetEnv AUTH_TOKEN a
+SetEnv API_CLIENT b

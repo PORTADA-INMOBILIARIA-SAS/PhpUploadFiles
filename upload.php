@@ -1,9 +1,78 @@
 <?php
 
+/**
+* *@description que gonorrea php
+* */
+
+
+$allowedOrigins = [
+    'http://localhost:3000',
+    'http://10.1.1.249:3000',
+    'https://apicrinmo.azurewebsites.net',
+];
+
+// Get request origin
+$requestOrigin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : null;
+
+// Check if request origin is allowed
+if (in_array($requestOrigin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $requestOrigin");
+}
+
+// Set other CORS headers
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, authorization, accept, origin, apiclient, Cache-Control, X-Requested-With");
+header("Access-Control-Allow-Methods: POST, OPTIONS, GET, PUT");
+header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
+
+// Handle OPTIONS request (preflight)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit();
+}
 
 // Set up CORS headers
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
+
+
+function CORSMiddleware($allowedOrigins) {
+    return function ($request, $response, $next) use ($allowedOrigins) {
+        $requestOrigin = $request->getHeaderLine('Origin');
+
+        if (in_array($requestOrigin, $allowedOrigins)) {
+            $response = $response->withHeader('Access-Control-Allow-Origin', $requestOrigin);
+        }
+
+        $response = $response->withHeader('Access-Control-Allow-Credentials', 'true')
+                             ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, authorization, accept, origin, apiclient, Cache-Control, X-Requested-With')
+                             ->withHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET, PUT');
+
+        if ($request->getMethod() == 'OPTIONS') {
+            return $response->withStatus(204);
+        }
+
+        return $next($request, $response);
+    };
+}
+
+
+// Function to verify authorization
+function verifyAuthorization(string $authToken, string $apiClient) : bool {
+    // Get authentication data from environment variables
+    $expectedToken = apache_getenv('AUTH_TOKEN');
+    $expectedApiClient = apache_getenv( 'API_CLIENT' );
+
+	if ($authToken == "" || $apiClient == "") {
+		return false;
+   	}
+
+
+    // Check if provided token and API client match expected values
+    if ($authToken == $expectedToken && $apiClient == $expectedApiClient) {
+        return true; // Authorization successful
+    } else {
+        return false; // Authorization failed
+    }
+}
 
 // Function to verify uploaded files
 function verifyFiles(string $mimetype) : bool {
@@ -41,7 +110,7 @@ function handleUpload($module, $id) {
 			$fileMimeType = mime_content_type($file['tmp_name']);
 			$filename = basename($file['name']);
 			$fileExtension = pathinfo($filename, PATHINFO_EXTENSION);
-			$destination = $uploadDir .   $fileExtension ;
+			$destination = $uploadDir  ;
 
 			if(!verifyFiles($fileMimeType)) {
 
@@ -79,22 +148,34 @@ function handleUpload($module, $id) {
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
 switch ($requestMethod) {
-    case 'POST':
-        $module = $_POST['module'] ?? '';
-        $id = $_POST['id'] ?? '';
+	case 'POST':
+		$module = $_POST['module'] ?? '';
+		$id = $_POST['id'] ?? '';
 
-        if ($module !== '' && $id !== '') {
-                handleUpload($module, $id);
-        } else {
-            http_response_code(400);
-            $response['response'] = "Module or ID not provided";
-            echo json_encode($response);
-        }
-        break;
+		// Get authorization headers
+		$authToken = $_SERVER['HTTP_AUTH_TOKEN'] ?? '';
+		$apiClient = $_SERVER['HTTP_API_CLIENT'] ?? '';
 
-    default:
-        http_response_code(405);
-        $response['response'] = "Method Not Allowed";
-        echo json_encode($response);
-        break;
+
+		if(!verifyAuthorization($authToken, $apiClient)) {
+			http_response_code(401);
+			$response['response'] = "No tienes permiso para acceder a esto";
+			echo json_encode($response);
+			return;
+		}
+
+		if ($module !== '' && $id !== '') {
+			handleUpload($module, $id);
+		} else {
+			http_response_code(400);
+			$response['response'] = "Module or ID not provided";
+			echo json_encode($response);
+		}
+		break;
+
+	default:
+	http_response_code(405);
+	$response['response'] = "Method Not Allowed";
+	echo json_encode($response);
+	break;
 }
