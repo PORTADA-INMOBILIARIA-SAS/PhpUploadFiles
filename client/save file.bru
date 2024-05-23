@@ -1,0 +1,29 @@
+meta {
+  name: save file
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost/PhpUploadsFiles/upload.php
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  API_CLIENT: {{FILE_MANAGER_CLIENT}}
+  AUTH_TOKEN: {{FILE_MANAGER_TOKEN}}
+}
+
+body:json {
+  {
+    "module": "inventarios_recibimientos",
+    "id": 1
+  }
+}
+
+body:multipart-form {
+  module: inventarios_recibimientos
+  file: @file(C:\Users\pc\Downloads\firma.jpeg)
+  id: 2
+}
